@@ -8,7 +8,7 @@ import enUS from 'antd/lib/locale/en_US';
 export default function Page() {
   return (
     // <ConfigProvider locale={enUS}>
-      <PageContainer ghost 
+      <PageContainer
       header={{
         breadcrumb: {}
       }}>

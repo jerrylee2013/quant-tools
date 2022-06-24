@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { ProColumns, ActionType } from '@ant-design/pro-components';
 import {
-  ProCard, ProForm, ProDescriptions, StatisticCard,
-  ProTable, ProFormSelect, ProFormSlider, DrawerForm
+  ProCard, ProForm, ProDescriptions, StatisticCard, ProList,
+  ProTable, ProFormSelect, ProFormSlider, ProFormMoney
 } from '@ant-design/pro-components';
-import { Typography, Collapse } from 'antd';
+import { Typography, Collapse, Row, Col } from 'antd';
 import Decimal from 'decimal.js';
 import styles from './index.less';
 import FormItem from 'antd/lib/form/FormItem';
@@ -17,6 +17,7 @@ type QuanGridParam = {
   n: number,
   a: number,
   f: number,
+  u: number,
   // k: Number,
   ps0: number,
   pb0: number
@@ -39,6 +40,12 @@ type QuanGridResult = {
   Cdr: number, // 无对冲时，到达天线时的交易费用
 }
 
+type OrderItem = {
+  price: number, // 挂单金额
+  type: string, // s 卖单, b买单, c开仓价
+  real: boolean, // true 真实下单
+}
+
 export default function Page() {
   const [gridParams, setGridParams] = useState<QuanGridParam | null>(null);
   const [gridResult, setGridResult] = useState<QuanGridResult>({
@@ -57,6 +64,7 @@ export default function Page() {
     Cdh: 0,
     Cdr: 0
   });
+  const [gridOrders, setGridOrders] = useState<Array<OrderItem>>([]);
   const descRef = useRef<ActionType>();
   const [riskForm] = ProForm.useForm();
   const columns: ProColumns[] = [
@@ -78,7 +86,6 @@ export default function Page() {
           message: '必须输入开仓价格'
         }]
       },
-      hideInDescriptions: true
     },
     {
       title: '天线价格',
@@ -98,7 +105,22 @@ export default function Page() {
           message: '必须输入天线价格'
         }]
       },
-      hideInDescriptions: true
+      renderFormItem: (schema, config, form, action?) => {
+        const p0 = form.getFieldValue('p0');
+        const ph = form.getFieldValue('ph');
+        let help = "";
+        if (typeof p0 === "number" && typeof ph === "number") {
+          help = "相对开仓价上浮" + (((ph - p0) / p0) * 100).toFixed(2) + "%"
+        }
+        return <ProFormMoney
+          name="ph"
+          extra={help}
+        />
+      },
+      render:(dom, entity) => {
+        return <Text><Text>{`$${dom}`}</Text><Text type="danger">{`(上浮${((entity.ph - entity.p0)*100/entity.p0).toFixed(4)}%)`}</Text></Text>
+      },
+
     },
     {
       title: '地线价格',
@@ -118,26 +140,41 @@ export default function Page() {
           message: '必须输入地线价格'
         }]
       },
-      hideInDescriptions: true
+      renderFormItem: (schema, config, form, action?) => {
+        const p0 = form.getFieldValue('p0');
+        const pl = form.getFieldValue('pl');
+        let help = "";
+        if (typeof p0 === "number" && typeof pl === "number") {
+          help = "相对开仓价下浮" + (((p0 - pl) / p0) * 100).toFixed(2) + "%"
+        }
+        return <ProFormMoney
+          name="pl"
+          extra={help}
+        />
+      },
+      render:(dom, entity) => {
+        return <Text><Text>{`$${dom}`}</Text><Text type="success">{`(下浮${((entity.p0 - entity.pl)*100/entity.p0).toFixed(4)}%)`}</Text></Text>
+      },
+
     },
-    {
-      title: '买一价格',
-      dataIndex: 'pb0',
-      valueType: (item: any) => ({
-        type: "money",
-        locale: "en-US"
-      }),
-      hideInForm: true
-    },
-    {
-      title: '卖一价格',
-      dataIndex: 'ps0',
-      valueType: (item: any) => ({
-        type: "money",
-        locale: "en-US"
-      }),
-      hideInForm: true
-    },
+    // {
+    //   title: '买一价格',
+    //   dataIndex: 'pb0',
+    //   valueType: (item: any) => ({
+    //     type: "money",
+    //     locale: "en-US"
+    //   }),
+    //   hideInForm: true
+    // },
+    // {
+    //   title: '卖一价格',
+    //   dataIndex: 'ps0',
+    //   valueType: (item: any) => ({
+    //     type: "money",
+    //     locale: "en-US"
+    //   }),
+    //   hideInForm: true
+    // },
     {
       title: '格子总数',
       dataIndex: 'n',
@@ -155,7 +192,7 @@ export default function Page() {
           message: '必须输入格子总数'
         }]
       },
-      hideInDescriptions: true
+
     },
     {
       title: '单位交易量(对应现货数量)',
@@ -171,10 +208,25 @@ export default function Page() {
       formItemProps: {
         rules: [{
           required: true,
-          message: '必须输入单位交易量'
+          message: '必须输入单位现货交易量'
         }]
       },
-      hideInDescriptions: true
+    },
+    {
+      title: '单格金额',
+      dataIndex: 'u',
+      valueType: (item: any) => ({
+        type: "money",
+        locale: "en-US"
+      }),
+      fieldProps: {
+        min: 0,
+        precision: 5,
+        style: {
+          width: 150
+        }
+      },
+      hideInForm: true,
     },
     {
       title: '交易费率',
@@ -203,6 +255,7 @@ export default function Page() {
     }
     params.ps0 = ps0;
     params.pb0 = pb0;
+    params.u = (params.ph - params.pl) / params.n;
     params.f = 0.00018;
     console.log('params', params);
     setGridParams(params);
@@ -253,6 +306,31 @@ export default function Page() {
     let Cc: number = (sa + h) * p0 * f;
     let I: number = C + Cc + h * p0 + h * p0 * f;
 
+    let orderList: Array<OrderItem> = [];
+
+    for (let pr = gridParams?.ph ?? 0; pr > (gridParams?.p0 ?? 0); pr -= gridParams?.u ?? 0) {
+      orderList.push({
+        price: pr,
+        type: "s",
+        real: true
+      })
+    };
+    orderList[orderList.length - 1].real = false;
+    orderList.push({
+      price: gridParams?.p0,
+      type: "c",
+      real: false
+    })
+    for (let pr = gridParams?.pb0 ?? 0; pr > (gridParams?.pl ?? 0); pr -= gridParams?.u ?? 0) {
+      orderList.push({
+        price: pr,
+        type: "b",
+        real: true
+      })
+    }
+
+    console.log('order list', orderList);
+    setGridOrders(orderList);
     setGridResult({
       I,
       h,
@@ -289,6 +367,30 @@ export default function Page() {
                 onSubmit={onGridParamFinish}
                 form={{
                   layout: "inline"
+                }}
+              />
+            </Collapse.Panel>
+          </Collapse>
+        </ProCard>
+        <ProCard>
+          <Collapse>
+            <Collapse.Panel key="order-list" header="挂单列表">
+              <ProList
+                dataSource={gridOrders}
+                metas={{
+                  content: {
+                    render: (text: React.ReactNode, record: OrderItem, index: number) => {
+                      if (record.real) {
+                        return <Text type={record.type === "s" ? "danger" : "success"}>${record.price.toFixed(4)}</Text>
+                      } else {
+                        if (record.type !== "c") {
+                          return <Text>${record.price.toFixed(4)}(无挂单)</Text>
+                        } else {
+                          return <Text>${record.price.toFixed(4)}(开仓价)</Text>
+                        }
+                      }
+                    }
+                  }
                 }}
               />
             </Collapse.Panel>
@@ -338,62 +440,78 @@ export default function Page() {
           </ProForm>
         </ProCard>
         <ProCard title="建仓数据" split="horizontal">
-          <StatisticCard.Group>
-            <StatisticCard
-              statistic={{
-                title: '总卖单数量s',
-                value: gridResult.s.toFixed(8),
-                precision: 4,
-              }}
-            />
-            <StatisticCard
-              statistic={{
-                title: '总买单数量b',
-                precision: 4,
-                value: gridResult.b.toFixed(8)
-              }}
-            />
-          </StatisticCard.Group>
-          <StatisticCard.Group>
-            <StatisticCard
-              statistic={{
-                title: '建仓市值C',
-                valueRender: (node) => {
-                  return <Text type="success" >{gridResult.C.toFixed(4)}</Text>
-                },
-              }}
-            />
-            <StatisticCard
-              statistic={{
-                title: '建仓费用Cc',
-                valueRender: (node) => {
-                  return <Text type="danger" >{(-1 * gridResult.Cc).toFixed(4)}</Text>
-                }
-              }}
-            />
-          </StatisticCard.Group>
+          <Row gutter={8}>
+            <Col>
+              <StatisticCard
+                statistic={{
+                  title: '总卖单数量s',
+                  value: gridResult.s.toFixed(8),
+                  precision: 4,
+                }}
+              />
+            </Col>
+            <Col>
+              <StatisticCard
+                statistic={{
+                  title: '总买单数量b',
+                  precision: 4,
+                  value: gridResult.b.toFixed(8)
+                }}
+              />
+            </Col>
+            <Col>
+              <StatisticCard
+                statistic={{
+                  title: '建仓市值C',
+                  prefix: '$',
+                  precision: 4,
+                  value: gridResult.C.toFixed(8),
+                  valueStyle: { color: "green" }
+                }}
+              />
+            </Col>
+            <Col>
+              <StatisticCard
+                statistic={{
+                  title: '建仓费用Cc',
+                  prefix: '$',
+                  precision: 4,
+                  value: (-1 * gridResult.Cc).toFixed(8),
+                  valueStyle: { color: "red" }
+                }}
+              />
+            </Col>
+          </Row>
         </ProCard>
       </ProCard>
       <ProCard title="网格风险收益面板" split="horizontal">
         <ProCard >
-          <StatisticCard
-            statistic={{
-              title: '对冲空单仓位(h)',
-              valueRender: (node) => {
-                return <Text type="success" mark>{gridResult.h.toFixed(4)}</Text>
-              },
-            }}
-          />
-          <StatisticCard
-            statistic={{
-              title: '初始总投入(I)',
-              precision: 4,
-              valueRender: (node) => {
-                return <Text type="success" >{gridResult.I.toFixed(4)}</Text>
-              },
-              // value: gridResult.I.toFixed(8)
-            }}
-          />
+          <Row gutter={8}>
+            <Col>
+              <StatisticCard
+                statistic={{
+                  title: '对冲空单仓位(h)',
+                  suffix: '个',
+                  precision: 4,
+                  value: gridResult.h.toFixed(8),
+                  valueStyle: { color: "blue" }
+                }}
+              />
+            </Col>
+            <Col>
+              <StatisticCard
+                statistic={{
+                  title: '初始总投入(I)',
+                  prefix: '$',
+                  precision: 4,
+                  value: gridResult.I.toFixed(8),
+                  valueStyle: { color: "green" }
+                }}
+              />
+            </Col>
+          </Row>
+
+
         </ProCard>
         <ProCard title="损益数据明细" split="horizontal">
 
@@ -402,109 +520,121 @@ export default function Page() {
               <StatisticCard.Statistic
                 title='无对冲亏损(Dl)'
                 layout="vertical"
-                valueRender={(node) => {
-                  return <Text type="danger" >{(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf)).toFixed(4)}</Text>
-                }}
+                precision={4}
+                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf)).toFixed(8)}
+                prefix="$"
+                valueStyle={{ color: "red" }}
 
               />
               <StatisticCard.Statistic
                 title='无对冲盈亏比'
-                valueRender={(node) =>
-                  <Text type="danger" >{(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf) * 100 / gridResult.I).toFixed(4)}%</Text>
-                }
+                precision={4}
+                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf) * 100 / gridResult.I).toFixed(4)}
+                suffix="%"
+                valueStyle={{ color: "red" }}
                 layout="vertical"
               />
               <StatisticCard.Statistic
                 title='对冲后亏损(Dl)'
                 layout="vertical"
-                valueRender={(node) => {
-                  return <Text type="danger" >{(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgef - gridResult.Pt)).toFixed(4)}</Text>
-                }}
+                precision={4}
+                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgef - gridResult.Pt)).toFixed(8)}
+                prefix="$"
+                valueStyle={{ color: "red" }}
 
               />
               <StatisticCard.Statistic
                 title='对冲后盈亏比'
-                valueRender={(node) =>
-                  <Text type="danger" >{(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgef - gridResult.Pt) * 100 / gridResult.I).toFixed(4)}%</Text>
-                }
+                precision={4}
+                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgef - gridResult.Pt) * 100 / gridResult.I).toFixed(4)}
+                suffix="%"
+                valueStyle={{ color: "red" }}
                 layout="vertical"
               />
               <StatisticCard.Statistic
                 title='地线空单平仓收益(Pt)'
-                valueRender={(node) => <Text type="success">
-                  {gridResult.Pt.toFixed(4)}
-                </Text>}
-
+                prefix='$'
+                precision={4}
+                value={gridResult.Pt.toFixed(8)}
+                valueStyle={{ color: "green" }}
                 layout="vertical"
               />
               <StatisticCard.Statistic
-
                 title='交易费用(Cdl)'
                 layout="vertical"
-                valueRender={(node) => <Text type="danger">
-                  {(-1 * (gridResult.Bf + gridResult.hedgef)).toFixed(4)}
-                </Text>}
-
+                precision={4}
+                value={(-1 * (gridResult.Bf + gridResult.hedgef)).toFixed(8)}
+                prefix="$"
+                valueStyle={{ color: "red" }}
               />
               <StatisticCard.Statistic
-
                 title='多单市值(Vl)'
                 layout="vertical"
-                valueRender={(node) => <Text type="success">
-                  {gridResult.Vl.toFixed(4)}
-                </Text>}
-
+                prefix='$'
+                precision={4}
+                value={gridResult.Vl.toFixed(8)}
+                valueStyle={{ color: "green" }}
               />
             </ProCard>
             <ProCard title="单边出天线">
               <StatisticCard.Statistic
                 title='无对冲收益'
                 layout="vertical"
-                valueRender={(node) => {
-                  return <Text type="success" >{((gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdr)).toFixed(4)}</Text>
-                }}
+                precision={4}
+                value={((gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdr)).toFixed(8)}
+                prefix="$"
+                valueStyle={{ color: "green" }}
               />
               <StatisticCard.Statistic
                 title='无对冲盈亏比'
                 layout="vertical"
-                valueRender={(node) =>
-                  <Text type="success" >{(((gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdr)) * 100 / gridResult.I).toFixed(4)}%</Text>
-                }
+                precision={4}
+                value={(((gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdr)) * 100 / gridResult.I).toFixed(8)}
+                suffix="%"
+                valueStyle={{ color: "green" }}
               />
               <StatisticCard.Statistic
                 title='对冲后亏损(Dh)'
                 layout="vertical"
-                valueRender={(node) => {
-                  return <Text type="danger" >{(-1 * (gridResult.Dh - (gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdh))).toFixed(4)}</Text>
-                }}
+                precision={4}
+                value={((-1 * (gridResult.Dh - (gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdh)))).toFixed(8)}
+                prefix="$"
+                valueStyle={{ color: "red" }}
+
               />
               <StatisticCard.Statistic
                 title='对冲后盈亏比'
                 layout="vertical"
-                valueRender={(node) =>
-                  <Text type="danger" >{(-1 * (gridResult.Dh - (gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdh)) * 100 / gridResult.I).toFixed(4)}%</Text>
-                }
+                precision={4}
+                value={(-1 * (gridResult.Dh - (gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdh)) * 100 / gridResult.I).toFixed(8)}
+                suffix="%"
+                valueStyle={{ color: "red" }}
+
               />
               <StatisticCard.Statistic
                 title='天线空单平仓亏损(Dh)'
                 layout="vertical"
-                valueRender={(node) => <Text type="danger">
-                  {(-1 * gridResult.Dh).toFixed(4)}
-                </Text>}
+                precision={4}
+                value={(-1 * gridResult.Dh).toFixed(8)}
+                prefix="$"
+                valueStyle={{ color: "red" }}
+
               />
               <StatisticCard.Statistic
                 title='交易续费(Cdh)'
                 layout="vertical"
-                valueRender={(node) => <Text type="danger">
-                  {(-1 * gridResult.Cdh).toFixed(4)}
-                </Text>}
+                precision={4}
+                value={(-1 * gridResult.Cdh).toFixed(8)}
+                prefix="$"
+                valueStyle={{ color: "red" }}
               />
               <StatisticCard.Statistic
                 title='多单市值(Vh)'
                 layout="vertical"
-                valueRender={(node) => <Text type="success">
-                  {gridResult.Vh.toFixed(4)}
-                </Text>}
+                precision={4}
+                value={gridResult.Vh.toFixed(8)}
+                prefix="$"
+                valueStyle={{ color: "green" }}
               />
 
             </ProCard>
