@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { ProColumns, ActionType } from '@ant-design/pro-components';
 import {
   ProCard, ProForm, ProDescriptions, StatisticCard,
-  ProTable, ProFormSelect, ProFormSlider
+  ProTable, ProFormSelect, ProFormSlider, DrawerForm
 } from '@ant-design/pro-components';
 import { Typography, Collapse } from 'antd';
 import Decimal from 'decimal.js';
@@ -36,6 +36,7 @@ type QuanGridResult = {
   Dh: number, // 空单在天线平仓亏损
   Vh: number, // 天线位置的多单市值
   Cdh: number, // 到达天线时，累计多单成交的费用
+  Cdr: number, // 无对冲时，到达天线时的交易费用
 }
 
 export default function Page() {
@@ -53,7 +54,8 @@ export default function Page() {
     Vl: 0,
     Dh: 0,
     Vh: 0,
-    Cdh: 0
+    Cdh: 0,
+    Cdr: 0
   });
   const descRef = useRef<ActionType>();
   const [riskForm] = ProForm.useForm();
@@ -264,28 +266,33 @@ export default function Page() {
       Vl: a * (s + b) * (ps0 - b * u),
       Dh: h * (ph - p0),
       Vh: a * ((ps0 + u) * s + s * (s - 1) * u / 2 + pl * b + b * (b - 1) * u / 2),
-      Cdh: h * ph * f + a * ((ps0 + u) * s + s * (s - 1) * u / 2) * f
+      Cdh: h * ph * f + a * ((ps0 + u) * s + s * (s - 1) * u / 2) * f,
+      Cdr: a * ((ps0 + u) * s + s * (s - 1) * u / 2) * f
     });
   }
 
 
   return (
     <ProCard
-      title="网格计算器"
-      split="vertical"
+
+      split="horizontal"
       bordered
       headerBordered
     >
-      <ProCard title="网格参数" split="horizontal">
+      <ProCard split="horizontal">
         <ProCard>
-          <ProTable
-            columns={columns}
-            type="form"
-            onSubmit={onGridParamFinish}
-            form={{
-              layout: "inline"
-            }}
-          />
+          <Collapse>
+            <Collapse.Panel key="grid-params-input" header="网格参数输入面板">
+              <ProTable
+                columns={columns}
+                type="form"
+                onSubmit={onGridParamFinish}
+                form={{
+                  layout: "inline"
+                }}
+              />
+            </Collapse.Panel>
+          </Collapse>
         </ProCard>
         <ProCard title="天地对冲参数调整">
           <ProDescriptions actionRef={descRef}
@@ -317,9 +324,9 @@ export default function Page() {
               label="风险模型"
               disabled={!gridParams?.p0}
               marks={{
-                0: '完全对冲地线亏损',
-                50: '天地亏损均分',
-                100: '完全对冲天线亏损'
+                0: '对冲地线',
+                50: '天地均分',
+                100: '对冲天线'
               }}
               fieldProps={{
                 style: {
@@ -330,7 +337,7 @@ export default function Page() {
             />
           </ProForm>
         </ProCard>
-        <ProCard title="建仓数据">
+        <ProCard title="建仓数据" split="horizontal">
           <StatisticCard.Group>
             <StatisticCard
               statistic={{
@@ -346,21 +353,24 @@ export default function Page() {
                 value: gridResult.b.toFixed(8)
               }}
             />
+          </StatisticCard.Group>
+          <StatisticCard.Group>
             <StatisticCard
               statistic={{
                 title: '建仓市值C',
-                precision: 4,
-                value: gridResult.C.toFixed(8)
+                valueRender: (node) => {
+                  return <Text type="success" >{gridResult.C.toFixed(4)}</Text>
+                },
               }}
             />
             <StatisticCard
               statistic={{
                 title: '建仓费用Cc',
-                precision: 4,
-                value: gridResult.Cc.toFixed(8)
+                valueRender: (node) => {
+                  return <Text type="danger" >{(-1 * gridResult.Cc).toFixed(4)}</Text>
+                }
               }}
             />
-
           </StatisticCard.Group>
         </ProCard>
       </ProCard>
@@ -369,15 +379,19 @@ export default function Page() {
           <StatisticCard
             statistic={{
               title: '对冲空单仓位(h)',
-              value: gridResult.h.toFixed(8),
-              precision: 4,
+              valueRender: (node) => {
+                return <Text type="success" mark>{gridResult.h.toFixed(4)}</Text>
+              },
             }}
           />
           <StatisticCard
             statistic={{
               title: '初始总投入(I)',
               precision: 4,
-              value: gridResult.I.toFixed(8)
+              valueRender: (node) => {
+                return <Text type="success" >{gridResult.I.toFixed(4)}</Text>
+              },
+              // value: gridResult.I.toFixed(8)
             }}
           />
         </ProCard>
@@ -386,75 +400,111 @@ export default function Page() {
           <ProCard split="vertical">
             <ProCard title="单边出地线" >
               <StatisticCard.Statistic
-                title='单边亏损(Dl)'
+                title='无对冲亏损(Dl)'
                 layout="vertical"
-                precision={4}
-                value={(gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgef - gridResult.Pt).toFixed(8)}
+                valueRender={(node) => {
+                  return <Text type="danger" >{(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf)).toFixed(4)}</Text>
+                }}
 
               />
               <StatisticCard.Statistic
-                title='盈亏比'
-                precision={4}
-                suffix="%"
-                value={((gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgef - gridResult.Pt) * 100 / gridResult.I).toFixed(8)}
+                title='无对冲盈亏比'
+                valueRender={(node) =>
+                  <Text type="danger" >{(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf) * 100 / gridResult.I).toFixed(4)}%</Text>
+                }
+                layout="vertical"
+              />
+              <StatisticCard.Statistic
+                title='对冲后亏损(Dl)'
+                layout="vertical"
+                valueRender={(node) => {
+                  return <Text type="danger" >{(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgef - gridResult.Pt)).toFixed(4)}</Text>
+                }}
+
+              />
+              <StatisticCard.Statistic
+                title='对冲后盈亏比'
+                valueRender={(node) =>
+                  <Text type="danger" >{(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgef - gridResult.Pt) * 100 / gridResult.I).toFixed(4)}%</Text>
+                }
                 layout="vertical"
               />
               <StatisticCard.Statistic
                 title='地线空单平仓收益(Pt)'
-                precision={4}
-                value={gridResult.Pt.toFixed(8)}
+                valueRender={(node) => <Text type="success">
+                  {gridResult.Pt.toFixed(4)}
+                </Text>}
+
                 layout="vertical"
               />
               <StatisticCard.Statistic
 
                 title='交易费用(Cdl)'
                 layout="vertical"
-                precision={4}
-                value={(gridResult.Bf + gridResult.hedgef).toFixed(8)}
+                valueRender={(node) => <Text type="danger">
+                  {(-1 * (gridResult.Bf + gridResult.hedgef)).toFixed(4)}
+                </Text>}
 
               />
               <StatisticCard.Statistic
 
                 title='多单市值(Vl)'
                 layout="vertical"
-                value={gridResult.Vl.toFixed(8)}
-                precision={4}
+                valueRender={(node) => <Text type="success">
+                  {gridResult.Vl.toFixed(4)}
+                </Text>}
+
               />
-
-
             </ProCard>
             <ProCard title="单边出天线">
               <StatisticCard.Statistic
-                title='单边亏损(Dh)'
+                title='无对冲收益'
                 layout="vertical"
-                precision={4}
-                value={(gridResult.Dh - (gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdh)).toFixed(8)}
-
+                valueRender={(node) => {
+                  return <Text type="success" >{((gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdr)).toFixed(4)}</Text>
+                }}
               />
               <StatisticCard.Statistic
-                title='盈亏比'
+                title='无对冲盈亏比'
                 layout="vertical"
-                precision={4}
-                suffix="%"
-                value={((gridResult.Dh - (gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdh)) * 100 / gridResult.I).toFixed(8)}
+                valueRender={(node) =>
+                  <Text type="success" >{(((gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdr)) * 100 / gridResult.I).toFixed(4)}%</Text>
+                }
+              />
+              <StatisticCard.Statistic
+                title='对冲后亏损(Dh)'
+                layout="vertical"
+                valueRender={(node) => {
+                  return <Text type="danger" >{(-1 * (gridResult.Dh - (gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdh))).toFixed(4)}</Text>
+                }}
+              />
+              <StatisticCard.Statistic
+                title='对冲后盈亏比'
+                layout="vertical"
+                valueRender={(node) =>
+                  <Text type="danger" >{(-1 * (gridResult.Dh - (gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdh)) * 100 / gridResult.I).toFixed(4)}%</Text>
+                }
               />
               <StatisticCard.Statistic
                 title='天线空单平仓亏损(Dh)'
                 layout="vertical"
-                precision={4}
-                value={gridResult.Dh.toFixed(8)}
+                valueRender={(node) => <Text type="danger">
+                  {(-1 * gridResult.Dh).toFixed(4)}
+                </Text>}
               />
               <StatisticCard.Statistic
-                title='多单平仓手续费(Cdh)'
+                title='交易续费(Cdh)'
                 layout="vertical"
-                precision={4}
-                value={gridResult.Cdh.toFixed(8)}
+                valueRender={(node) => <Text type="danger">
+                  {(-1 * gridResult.Cdh).toFixed(4)}
+                </Text>}
               />
               <StatisticCard.Statistic
                 title='多单市值(Vh)'
                 layout="vertical"
-                precision={4}
-                value={(gridResult.Vh.toFixed(8))}
+                valueRender={(node) => <Text type="success">
+                  {gridResult.Vh.toFixed(4)}
+                </Text>}
               />
 
             </ProCard>
