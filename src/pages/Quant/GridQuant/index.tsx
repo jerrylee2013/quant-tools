@@ -34,12 +34,15 @@ type QuanGridResult = {
   Cc: number, // 建仓费用
   Pt: number, // 空单在地线平仓收益
   Bf: number, // 多单成交手续费
-  hedgef: number, // 空单平仓手续费
+  hedgefl: number, // 空单地线平仓手续费
+  hedgefh: number, // 空单天线平仓手续费
   Vl: number, //平仓市值
   Dh: number, // 空单在天线平仓亏损
   Vh: number, // 天线位置的多单市值
   Cdh: number, // 到达天线时，累计多单成交的费用
   Cdr: number, // 无对冲时，到达天线时的交易费用
+  Cts: number, // 击穿天线卖单手续费 
+  Ctb: number, // 击穿地线买单手续费
 }
 
 type OrderItem = {
@@ -61,12 +64,15 @@ export default function Page() {
     Cc: 0,
     Pt: 0,
     Bf: 0,
-    hedgef: 0,
+    hedgefl: 0,
+    hedgefh: 0,
     Vl: 0,
     Dh: 0,
     Vh: 0,
     Cdh: 0,
-    Cdr: 0
+    Cdr: 0,
+    Cts: 0,
+    Ctb: 0,
   });
   const [gridOrders, setGridOrders] = useState<Array<OrderItem>>([]);
   const descRef = useRef<ActionType>();
@@ -352,12 +358,15 @@ export default function Page() {
       Cc,
       Pt: h * (p0 - pl),
       Bf: (pl * b + b * (b - 1) * u / 2) * a * f,
-      hedgef: h * pl * f,
+      hedgefl: h * pl * f,
+      hedgefh: h * ph * f,
       Vl: a * (s + b) * (ps0 - b * u),
       Dh: h * (ph - p0),
       Vh: a * ((ps0 + u) * s + s * (s - 1) * u / 2 + pl * b + b * (b - 1) * u / 2),
       Cdh: h * ph * f + a * ((ps0 + u) * s + s * (s - 1) * u / 2) * f,
-      Cdr: a * ((ps0 + u) * s + s * (s - 1) * u / 2) * f
+      Cdr: a * ((ps0 + u) * s + s * (s - 1) * u / 2) * f,
+      Cts: a * ((ps0 + u) * s + s * (s - 1) * u / 2) * f,
+      Ctb: (pl * b + b * (b - 1) * u / 2) * a * f,
     });
   }
 
@@ -488,7 +497,7 @@ export default function Page() {
             <Col>
               <StatisticCard
                 statistic={{
-                  title: '建仓费用Cc',
+                  title: '卖单建仓费用Cs',
                   prefix: '$',
                   precision: 4,
                   value: (-1 * gridResult.Cs).toFixed(8),
@@ -516,7 +525,7 @@ export default function Page() {
             <Col>
               <StatisticCard
                 statistic={{
-                  title: '合约手续费',
+                  title: '合约手续费(Ch)',
                   prefix: '$',
                   precision: 4,
                   value: (-1*gridResult.Ch).toFixed(8),
@@ -544,7 +553,7 @@ export default function Page() {
           <ProCard split="vertical">
             <ProCard title="单边出地线" >
               <StatisticCard.Statistic
-                title='无对冲亏损(Dl)'
+                title='无对冲亏损(Il)'
                 layout="vertical"
                 precision={4}
                 value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cs + gridResult.Bf)).toFixed(8)}
@@ -564,7 +573,7 @@ export default function Page() {
                 title='对冲后亏损(Dl)'
                 layout="vertical"
                 precision={4}
-                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgef - gridResult.Pt)).toFixed(8)}
+                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgefl - gridResult.Pt)).toFixed(8)}
                 prefix="$"
                 valueStyle={{ color: "red" }}
 
@@ -572,7 +581,7 @@ export default function Page() {
               <StatisticCard.Statistic
                 title='对冲后盈亏比'
                 precision={4}
-                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgef - gridResult.Pt) * 100 / gridResult.C).toFixed(4)}
+                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgefl - gridResult.Pt) * 100 / gridResult.C).toFixed(4)}
                 suffix="%"
                 valueStyle={{ color: "red" }}
                 layout="vertical"
@@ -586,10 +595,18 @@ export default function Page() {
                 layout="vertical"
               />
               <StatisticCard.Statistic
-                title='交易费用(Cdl)'
+                title='买单交易费用(Ctb)'
                 layout="vertical"
                 precision={4}
-                value={(-1 * (gridResult.Bf + gridResult.hedgef)).toFixed(8)}
+                value={(-1 * gridResult.Ctb).toFixed(8)}
+                prefix="$"
+                valueStyle={{ color: "red" }}
+              />
+              <StatisticCard.Statistic
+                title='空单平仓费用(hedgefl)'
+                layout="vertical"
+                precision={4}
+                value={(-1 * gridResult.hedgefl).toFixed(8)}
                 prefix="$"
                 valueStyle={{ color: "red" }}
               />
@@ -604,7 +621,7 @@ export default function Page() {
             </ProCard>
             <ProCard title="单边出天线">
               <StatisticCard.Statistic
-                title='无对冲收益'
+                title='无对冲收益(Ih)'
                 layout="vertical"
                 precision={4}
                 value={((gridResult.Vh - gridResult.C - gridResult.Cs - gridResult.Cdr)).toFixed(8)}
@@ -647,10 +664,18 @@ export default function Page() {
 
               />
               <StatisticCard.Statistic
-                title='交易续费(Cdh)'
+                title='卖单交易续费(Cts)'
                 layout="vertical"
                 precision={4}
-                value={(-1 * gridResult.Cdh).toFixed(8)}
+                value={(-1 * gridResult.Cts).toFixed(8)}
+                prefix="$"
+                valueStyle={{ color: "red" }}
+              />
+              <StatisticCard.Statistic
+                title='空单平仓费用(hedgefh)'
+                layout="vertical"
+                precision={4}
+                value={(-1 * gridResult.hedgefh).toFixed(8)}
                 prefix="$"
                 valueStyle={{ color: "red" }}
               />
