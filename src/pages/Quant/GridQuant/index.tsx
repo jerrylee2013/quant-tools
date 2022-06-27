@@ -117,8 +117,8 @@ export default function Page() {
           extra={help}
         />
       },
-      render:(dom, entity) => {
-        return <Text><Text>{`$${dom}`}</Text><Text type="danger">{`(上浮${((entity.ph - entity.p0)*100/entity.p0).toFixed(4)}%)`}</Text></Text>
+      render: (dom, entity) => {
+        return <Text><Text>{`$${dom}`}</Text><Text type="danger">{`(上浮${((entity.ph - entity.p0) * 100 / entity.p0).toFixed(4)}%)`}</Text></Text>
       },
 
     },
@@ -152,8 +152,8 @@ export default function Page() {
           extra={help}
         />
       },
-      render:(dom, entity) => {
-        return <Text><Text>{`$${dom}`}</Text><Text type="success">{`(下浮${((entity.p0 - entity.pl)*100/entity.p0).toFixed(4)}%)`}</Text></Text>
+      render: (dom, entity) => {
+        return <Text><Text>{`$${dom}`}</Text><Text type="success">{`(下浮${((entity.p0 - entity.pl) * 100 / entity.p0).toFixed(4)}%)`}</Text></Text>
       },
 
     },
@@ -245,14 +245,16 @@ export default function Page() {
       ...values
     }
     let u: number = (params.ph - params.pl) / params.n;
+    // let ps0: number = params.p0 + ((params.ph - params.p0) / u - Math.floor((params.ph - params.p0) / u))*u;
     let ps0: number = params.p0 + (params.ph - params.p0) % u;
-    if (ps0 === params.p0) {
-      ps0 = params.p0 + u;
-    }
-    let pb0: number = params.p0 - (params.p0 - params.pl) % u;
+    // if (ps0 === params.p0) {
+    //   ps0 = params.p0 + u;
+    // }
+    let pb0: number = params.p0 - ((params.p0 - params.pl) / u - Math.floor((params.p0 - params.pl) / u))*u;
     if (pb0 === params.p0) {
       pb0 = params.p0 - u;
     }
+    console.log('ps0, pb0',ps0,pb0);
     params.ps0 = ps0;
     params.pb0 = pb0;
     params.u = (params.ph - params.pl) / params.n;
@@ -308,7 +310,7 @@ export default function Page() {
 
     let orderList: Array<OrderItem> = [];
 
-    for (let pr = gridParams?.ph ?? 0; pr > (gridParams?.p0 ?? 0); pr -= gridParams?.u ?? 0) {
+    for (let pr = gridParams?.ph ?? 0; pr >= (gridParams?.ps0 ?? 0); pr -= gridParams?.u ?? 0) {
       orderList.push({
         price: pr,
         type: "s",
@@ -316,12 +318,16 @@ export default function Page() {
       })
     };
     orderList[orderList.length - 1].real = false;
-    orderList.push({
-      price: gridParams?.p0,
-      type: "c",
-      real: false
-    })
-    for (let pr = gridParams?.pb0 ?? 0; pr > (gridParams?.pl ?? 0); pr -= gridParams?.u ?? 0) {
+    if ((gridParams?.ps0 ?? 0) > (gridParams?.p0 ?? 0)) {
+      orderList.push({
+        price: gridParams?.p0 ?? 0,
+        type: "c",
+        real: false
+      })
+    } else {
+      orderList[orderList.length - 1].type="cs";
+    }
+    for (let pr = gridParams?.pb0 ?? 0; pr >= (gridParams?.pl ?? 0); pr -= gridParams?.u ?? 0) {
       orderList.push({
         price: pr,
         type: "b",
@@ -384,6 +390,9 @@ export default function Page() {
                         return <Text type={record.type === "s" ? "danger" : "success"}>${record.price.toFixed(4)}</Text>
                       } else {
                         if (record.type !== "c") {
+                          if (record.type === "cs") {
+                            return <Text>${record.price.toFixed(4)}(开仓价，无挂单)</Text>
+                          }
                           return <Text>${record.price.toFixed(4)}(无挂单)</Text>
                         } else {
                           return <Text>${record.price.toFixed(4)}(开仓价)</Text>
