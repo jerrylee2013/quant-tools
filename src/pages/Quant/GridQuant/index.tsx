@@ -564,7 +564,7 @@ export default function Page() {
               <StatisticCard.Statistic
                 title='无对冲盈亏比'
                 precision={4}
-                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf) * 100 / gridResult.C).toFixed(4)}
+                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cs + gridResult.Bf) * 100 / gridResult.C).toFixed(4)}
                 suffix="%"
                 valueStyle={{ color: "red" }}
                 layout="vertical"
@@ -632,7 +632,7 @@ export default function Page() {
                 title='无对冲盈亏比'
                 layout="vertical"
                 precision={4}
-                value={(((gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdr)) * 100 / gridResult.C).toFixed(8)}
+                value={(((gridResult.Vh - gridResult.C - gridResult.Cs - gridResult.Cdr)) * 100 / gridResult.C).toFixed(8)}
                 suffix="%"
                 valueStyle={{ color: "green" }}
               />
