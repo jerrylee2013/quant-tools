@@ -29,6 +29,8 @@ type QuanGridResult = {
   s: number, // 建仓卖单数量
   b: number, // 建仓买单数量
   C: number, // 建仓成本
+  Cs: number, // 建仓的卖单手续费
+  Ch: number, // 建仓的合约费用
   Cc: number, // 建仓费用
   Pt: number, // 空单在地线平仓收益
   Bf: number, // 多单成交手续费
@@ -54,6 +56,8 @@ export default function Page() {
     s: 0,
     b: 0,
     C: 0,
+    Cs: 0,
+    Ch: 0,
     Cc: 0,
     Pt: 0,
     Bf: 0,
@@ -343,6 +347,8 @@ export default function Page() {
       s: sa,
       b: ba,
       C,
+      Cs: sa * p0 * f,
+      Ch: h * p0 * f,
       Cc,
       Pt: h * (p0 - pl),
       Bf: (pl * b + b * (b - 1) * u / 2) * a * f,
@@ -485,7 +491,7 @@ export default function Page() {
                   title: '建仓费用Cc',
                   prefix: '$',
                   precision: 4,
-                  value: (-1 * gridResult.Cc).toFixed(8),
+                  value: (-1 * gridResult.Cs).toFixed(8),
                   valueStyle: { color: "red" }
                 }}
               />
@@ -504,6 +510,17 @@ export default function Page() {
                   precision: 4,
                   value: gridResult.h.toFixed(8),
                   valueStyle: { color: "blue" }
+                }}
+              />
+            </Col>
+            <Col>
+              <StatisticCard
+                statistic={{
+                  title: '合约手续费',
+                  prefix: '$',
+                  precision: 4,
+                  value: (-1*gridResult.Ch).toFixed(8),
+                  valueStyle: { color: "red" }
                 }}
               />
             </Col>
@@ -530,7 +547,7 @@ export default function Page() {
                 title='无对冲亏损(Dl)'
                 layout="vertical"
                 precision={4}
-                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf)).toFixed(8)}
+                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cs + gridResult.Bf)).toFixed(8)}
                 prefix="$"
                 valueStyle={{ color: "red" }}
 
@@ -538,7 +555,7 @@ export default function Page() {
               <StatisticCard.Statistic
                 title='无对冲盈亏比'
                 precision={4}
-                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf) * 100 / gridResult.I).toFixed(4)}
+                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf) * 100 / gridResult.C).toFixed(4)}
                 suffix="%"
                 valueStyle={{ color: "red" }}
                 layout="vertical"
@@ -555,7 +572,7 @@ export default function Page() {
               <StatisticCard.Statistic
                 title='对冲后盈亏比'
                 precision={4}
-                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgef - gridResult.Pt) * 100 / gridResult.I).toFixed(4)}
+                value={(-1 * (gridResult.C - gridResult.Vl + gridResult.Cc + gridResult.Bf + gridResult.hedgef - gridResult.Pt) * 100 / gridResult.C).toFixed(4)}
                 suffix="%"
                 valueStyle={{ color: "red" }}
                 layout="vertical"
@@ -590,7 +607,7 @@ export default function Page() {
                 title='无对冲收益'
                 layout="vertical"
                 precision={4}
-                value={((gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdr)).toFixed(8)}
+                value={((gridResult.Vh - gridResult.C - gridResult.Cs - gridResult.Cdr)).toFixed(8)}
                 prefix="$"
                 valueStyle={{ color: "green" }}
               />
@@ -598,7 +615,7 @@ export default function Page() {
                 title='无对冲盈亏比'
                 layout="vertical"
                 precision={4}
-                value={(((gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdr)) * 100 / gridResult.I).toFixed(8)}
+                value={(((gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdr)) * 100 / gridResult.C).toFixed(8)}
                 suffix="%"
                 valueStyle={{ color: "green" }}
               />
@@ -615,7 +632,7 @@ export default function Page() {
                 title='对冲后盈亏比'
                 layout="vertical"
                 precision={4}
-                value={(-1 * (gridResult.Dh - (gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdh)) * 100 / gridResult.I).toFixed(8)}
+                value={(-1 * (gridResult.Dh - (gridResult.Vh - gridResult.C - gridResult.Cc - gridResult.Cdh)) * 100 / gridResult.C).toFixed(8)}
                 suffix="%"
                 valueStyle={{ color: "red" }}
 
