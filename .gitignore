@@ -9,3 +9,5 @@
 /.umi-test
 /dist
 /.mfsu
+/server/node_modules
+/server/public
